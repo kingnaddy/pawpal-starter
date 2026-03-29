@@ -1,5 +1,8 @@
 # PawPal+ Project Reflection
 
+add pet info
+add tasks and see added tasks
+make a plan/schedule
 ## 1. System Design
 
 **a. Initial design**
