@@ -7,13 +7,11 @@ make a plan/schedule
 
 **a. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
+I went with 4 classes: `Pet`, `Task`, `Owner`, and `Scheduler`. `Pet` holds the animal's info and owns a list of tasks. `Task` stores what needs to be done, more details about the task and knows if it's due. `Owner` tracks the human's pets, time availability, and preferences. `Scheduler` takes all that info and builds a daily plan, ranks tasks, fits them into open time slots, and explains its choices.
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+Yeah, a few things shifted. Added a `ScheduledItem` dataclass to replace the sketchy `list[dict]` in `Scheduler` since untyped dicts are a misspelled key away from a bug. Gave `Task` a back-reference to its `Pet` so the scheduler doesn't have to juggle that link manually. Also updated `rank_tasks()` to take `(Task, Pet)` pairs so it can factor in medical conditions when prioritizing. Dropped `skip()` and `skipped_reason` entirely because they added complexity with no real payoff.
 
 ---
 
