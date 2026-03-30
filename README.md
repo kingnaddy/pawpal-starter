@@ -1,6 +1,29 @@
 # PawPal+ (Module 2 Project)
 
-You are building **PawPal+**, a Streamlit app that helps a pet owner plan care tasks for their pet.
+> A smart daily pet care scheduler built with Python and Streamlit.
+
+---
+
+## ✨ Features
+
+| Feature | Description |
+|---|---|
+| **Priority-based scheduling** | Tasks are ranked `high → medium → low`. Pets with medical conditions are always scheduled first. |
+| **Preferred time slots** | Each task targets `morning` (8 AM), `afternoon` (1 PM), or `evening` (6 PM). The scheduler jumps to the ideal slot rather than stacking tasks back-to-back. |
+| **Sorting by time** | `Scheduler.sort_by_time()` returns the full day's plan in strict chronological order using integer-minute arithmetic — no floating point drift. |
+| **Conflict warnings** | `detect_conflicts()` compares every pair of scheduled items with `itertools.combinations`. Overlapping tasks surface as a red expandable alert in the UI. |
+| **Daily & weekly recurrence** | Marking a task done via `mark_done()` automatically spawns the next occurrence: daily tasks reappear tomorrow, weekly tasks reappear in 7 days (calculated with `timedelta`). |
+| **Filtering** | Slice the schedule by pet name (`filter_by_pet`) or completion status (`filter_by_status`). |
+| **Unscheduled task reporting** | Tasks that don't fit any availability window are surfaced separately so nothing is silently dropped. |
+| **12-test suite** | Covers task lifecycle, pet isolation, edge cases, sorting correctness, recurrence logic, and conflict detection. |
+
+---
+
+## 📸 Demo
+
+<a href="/course_images/ai110/demo.png" target="_blank"><img src='/course_images/ai110/demo.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+
+---
 
 ## Scenario
 

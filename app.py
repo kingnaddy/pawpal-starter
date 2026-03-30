@@ -122,19 +122,63 @@ if st.button("Generate Schedule"):
         scheduler = Scheduler(owner=owner, schedule_date=date.today())
         scheduler.build_plan()
 
-        st.success("Schedule generated!")
-
-        for item in sorted(scheduler.scheduled_items, key=lambda i: i.start_time):
-            end_dt = item.start_time + timedelta(minutes=item.task.duration_minutes)
-            with st.container(border=True):
+        # ── Conflict Detection (red dropdown) ──────────────────────────────
+        conflicts = scheduler.detect_conflicts()
+        if conflicts:
+            with st.expander(
+                f"⚠️ {len(conflicts)} scheduling conflict(s) detected — click to review",
+                expanded=True,
+            ):
                 st.markdown(
-                    f"**[{item.start_time.strftime('%H:%M')} - {end_dt.strftime('%H:%M')}]**  "
-                    f"{item.pet.name}: {item.task.name}"
+                    "<span style='color:red; font-weight:bold;'>These tasks overlap in time. "
+                    "Consider adjusting durations or availability windows.</span>",
+                    unsafe_allow_html=True,
                 )
-                st.caption(f">> {item.reason}")
+                for warning in conflicts:
+                    st.markdown(
+                        f"<span style='color:red;'>🔴 {warning.strip()}</span>",
+                        unsafe_allow_html=True,
+                    )
+        else:
+            st.success("Schedule generated — no conflicts detected!")
 
+        # ── Sorted Schedule Table ──────────────────────────────────────────
+        sorted_items = scheduler.sort_by_time()
+
+        if sorted_items:
+            st.markdown("#### Today's Plan")
+            table_rows = []
+            for item in sorted_items:
+                end_dt = item.start_time + timedelta(minutes=item.task.duration_minutes)
+                table_rows.append({
+                    "Time": f"{item.start_time.strftime('%H:%M')} – {end_dt.strftime('%H:%M')}",
+                    "Pet": item.pet.name,
+                    "Task": item.task.name,
+                    "Priority": item.task.priority.capitalize(),
+                    "Duration": f"{item.task.duration_minutes} min",
+                    "Status": item.status.capitalize(),
+                })
+            st.dataframe(table_rows, hide_index=True, use_container_width=True)
+
+            # Detail cards beneath the table
+            for item in sorted_items:
+                end_dt = item.start_time + timedelta(minutes=item.task.duration_minutes)
+                with st.container(border=True):
+                    col_a, col_b = st.columns([3, 1])
+                    with col_a:
+                        st.markdown(
+                            f"**[{item.start_time.strftime('%H:%M')} – {end_dt.strftime('%H:%M')}]**  "
+                            f"{item.pet.name}: {item.task.name}"
+                        )
+                        st.caption(f">> {item.reason}")
+                    with col_b:
+                        if item.status == "done":
+                            st.success("Done")
+                        else:
+                            st.info("Pending")
+
+        # ── Unscheduled Tasks ──────────────────────────────────────────────
         if scheduler.unscheduled_tasks:
-            st.warning(f"Could not fit {len(scheduler.unscheduled_tasks)} task(s):")
+            st.warning(f"Could not fit {len(scheduler.unscheduled_tasks)} task(s) — no available window:")
             for t in scheduler.unscheduled_tasks:
-                label = f"- {t.name} | {t.priority} priority | {t.duration_minutes} min"
-                st.markdown(label)
+                st.markdown(f"- **{t.name}** | {t.priority} priority | {t.duration_minutes} min")

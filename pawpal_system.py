@@ -151,29 +151,32 @@ class Scheduler:
         availability: list[tuple],
     ) -> None:
         """Assign ranked tasks to available time windows, respecting preferred_time."""
-        # Build a mutable list of (start_hour, end_hour) windows with a cursor each
-        windows = [{"start": s, "end": e, "cursor": s} for s, e in availability]
+        # Store cursors in integer minutes to avoid floating-point drift.
+        # e.g. 20 min task: 7h + 20/60 hrs = 7.3333... → int(0.3333*60) = 19 (wrong).
+        # Integer minutes: 420 + 20 = 440 min → 440//60=7 h, 440%60=20 min (correct).
+        windows = [{"start": s * 60, "end": e * 60, "cursor": s * 60} for s, e in availability]
 
         for task, pet in ranked_tasks:
-            duration_hrs = task.duration_minutes / 60
             placed = False
 
-            # Try to find a window that matches preferred_time first, then any window
-            ideal_hour = self.TIME_PREFERENCE.get(task.preferred_time, 8)
+            # Compare cursor (minutes) against ideal start minute for preferred_time
+            ideal_min = self.TIME_PREFERENCE.get(task.preferred_time, 8) * 60
             windows_sorted = sorted(
                 windows,
-                key=lambda w: abs(w["cursor"] - ideal_hour)
+                key=lambda w: abs(w["cursor"] - ideal_min)
             )
 
             for window in windows_sorted:
-                slot_start  = window["cursor"]
-                slot_end    = slot_start + duration_hrs
+                # Jump to ideal time if it's still ahead of the cursor;
+                # otherwise fall back to the cursor (ideal slot already passed).
+                slot_start_min = max(window["cursor"], ideal_min)
+                slot_end_min   = slot_start_min + task.duration_minutes
 
-                if slot_end <= window["end"]:
+                if slot_end_min <= window["end"]:
                     start_dt = datetime(
                         self.date.year, self.date.month, self.date.day,
-                        int(slot_start),
-                        int((slot_start % 1) * 60),
+                        slot_start_min // 60,
+                        slot_start_min % 60,
                     )
                     reason = (
                         f"Scheduled at {start_dt.strftime('%H:%M')} | "
@@ -185,7 +188,7 @@ class Scheduler:
                     self.scheduled_items.append(
                         ScheduledItem(task=task, pet=pet, start_time=start_dt, reason=reason)
                     )
-                    window["cursor"] = slot_end   # advance cursor
+                    window["cursor"] = slot_end_min   # advance cursor in minutes
                     placed = True
                     break
 
