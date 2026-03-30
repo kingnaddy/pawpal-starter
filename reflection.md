@@ -24,8 +24,8 @@ Yeah, a few things shifted. Added a `ScheduledItem` dataclass to replace the ske
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+The conflict detector uses an O(n²) pairwise comparison via `itertools.combinations`. A more performant approach would sort tasks by start time and sweep with a sliding window (O(n log n)), but that's significantly harder to read and debug. For a pet scheduler with fewer than 20 tasks per day, the pairwise approach runs in microseconds and the extra complexity isn't justified.
+
 
 ---
 

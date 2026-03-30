@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime, date as Date, timedelta
+from itertools import combinations
 from typing import Optional
 
 
@@ -23,10 +24,16 @@ class Task:
     duration_minutes: int
     preferred_time: str              # morning | afternoon | evening
     last_completed: Optional[datetime] = None
+    next_due: Optional[Date] = None  # set when a recurring task spawns a new instance
     pet: Optional["Pet"] = field(default=None, repr=False)  # back-ref to owning Pet
 
     def is_due(self, check_date: Date) -> bool:
-        """Return True if this task should happen on the given date."""
+        """Return True if this task should happen on the given date.
+
+        If next_due is set (recurring instance), only becomes due on or after that date.
+        """
+        if self.next_due is not None:
+            return check_date >= self.next_due
         if self.frequency == "daily":
             return True
         if self.frequency == "as-needed":
@@ -185,6 +192,53 @@ class Scheduler:
             if not placed:
                 self.unscheduled_tasks.append(task)
 
+    # ── sorting & filtering ───────────────────────────────────────────────────
+
+    def sort_by_time(self) -> list[ScheduledItem]:
+        """Return scheduled items sorted by start time.
+
+        Uses a lambda key that converts each item's start_time to an
+        "HH:MM" string, which sorts correctly in chronological order
+        because the string comparison of zero-padded hours works the
+        same as numeric comparison (e.g. "08:00" < "13:30" < "17:00").
+        """
+        return sorted(
+            self.scheduled_items,
+            key=lambda item: item.start_time.strftime("%H:%M"),
+        )
+
+    def filter_by_status(self, status: str) -> list[ScheduledItem]:
+        """Return scheduled items matching the given status ('pending' or 'done')."""
+        return [item for item in self.scheduled_items if item.status == status]
+
+    def filter_by_pet(self, pet_name: str) -> list[ScheduledItem]:
+        """Return scheduled items for a specific pet (case-insensitive match)."""
+        return [
+            item for item in self.scheduled_items
+            if item.pet.name.lower() == pet_name.lower()
+        ]
+
+    def detect_conflicts(self) -> list[str]:
+        """Check for overlapping tasks and return warning strings (never raises).
+
+        Compares every unique pair of scheduled items once using combinations().
+        Two items conflict when their time windows overlap:
+            a.start < b.end  AND  b.start < a.end
+        Returns an empty list when the schedule is conflict-free.
+        """
+        warnings = []
+        for a, b in combinations(self.scheduled_items, 2):
+            a_end = a.start_time + timedelta(minutes=a.task.duration_minutes)
+            b_end = b.start_time + timedelta(minutes=b.task.duration_minutes)
+            if a.start_time < b_end and b.start_time < a_end:
+                warnings.append(
+                    f"  [CONFLICT] '{a.pet.name}: {a.task.name}' "
+                    f"({a.start_time.strftime('%H:%M')}-{a_end.strftime('%H:%M')}) "
+                    f"overlaps with '{b.pet.name}: {b.task.name}' "
+                    f"({b.start_time.strftime('%H:%M')}-{b_end.strftime('%H:%M')})"
+                )
+        return warnings
+
     # ── output & interaction ───────────────────────────────────────────────────
 
     def explain(self) -> str:
@@ -211,10 +265,54 @@ class Scheduler:
         return "\n".join(lines)
 
     def mark_done(self, task: Task) -> None:
-        """Mark a scheduled task as completed and update its last_completed timestamp."""
+        """Mark a scheduled task as completed and spawn the next occurrence.
+
+        For 'daily' tasks, the next instance is due tomorrow (today + 1 day).
+        For 'weekly' tasks, the next instance is due in 7 days (today + 7 days).
+        Uses timedelta to calculate the exact next_due date accurately.
+        'as-needed' tasks are not recurring, so no new instance is created.
+        """
         for item in self.scheduled_items:
             if item.task is task:
                 item.status = "done"
                 task.mark_complete(datetime.now())
+                self._spawn_next_occurrence(task)
                 return
         print(f"  [!] Task '{task.name}' not found in today's schedule.")
+
+    def _spawn_next_occurrence(self, completed_task: Task) -> None:
+        """Create and register the next instance of a recurring task.
+
+        Called automatically by mark_done(). Computes next_due with timedelta
+        so the calculation is always accurate regardless of month boundaries:
+            daily  → schedule_date + 1 day
+            weekly → schedule_date + 7 days
+            as-needed → no new instance; returns immediately
+
+        The new Task is a fresh copy (last_completed=None) with next_due set,
+        added directly to the pet's task list so it appears in future build_plan() calls.
+        """
+        if completed_task.frequency == "daily":
+            next_due = self.date + timedelta(days=1)
+        elif completed_task.frequency == "weekly":
+            next_due = self.date + timedelta(days=7)
+        else:
+            return  # as-needed tasks don't recur automatically
+
+        next_task = Task(
+            name=completed_task.name,
+            category=completed_task.category,
+            priority=completed_task.priority,
+            frequency=completed_task.frequency,
+            duration_minutes=completed_task.duration_minutes,
+            preferred_time=completed_task.preferred_time,
+            next_due=next_due,
+        )
+
+        if completed_task.pet is not None:
+            completed_task.pet.add_task(next_task)
+
+        print(
+            f"  [recurring] Next '{next_task.name}' scheduled for {next_due} "
+            f"({completed_task.frequency})"
+        )
