@@ -50,6 +50,35 @@ PawPal+ now includes algorithmic features that make the scheduler more intellige
 
 ---
 
+## Testing PawPal+
+
+### Run the test suite
+
+```bash
+python -m pytest tests/test_pawpal.py -v
+```
+
+### What the tests cover
+
+The suite contains **12 tests** across three layers of the system:
+
+| Area | Tests |
+|---|---|
+| **Task behavior** | `mark_complete()` stamps `last_completed`; calling it with no timestamp raises a clear error |
+| **Pet management** | Adding tasks increases count; back-reference (`task.pet`) is set correctly; pets don't share tasks |
+| **Edge cases** | Pet with zero tasks, pet with empty name, deleting the last task, completing one task doesn't affect others, two tasks at the same time |
+| **Sorting correctness** | `sort_by_time()` returns scheduled items in strict chronological order across morning, afternoon, and evening slots |
+| **Recurrence logic** | Calling `mark_done()` on a daily task creates a new task on the pet with `next_due = today + 1 day` and `last_completed = None` |
+| **Conflict detection** | `detect_conflicts()` flags overlapping scheduled items and returns a descriptive warning string |
+
+### Confidence Level
+
+⭐⭐⭐⭐⭐ **(5 / 5)**
+
+All 12 tests pass. Core scheduling logic (sorting, recurrence, conflict detection), task lifecycle, and edge cases are all verified. The system behaves correctly and predictably across happy paths and boundary conditions.
+
+---
+
 ### Suggested workflow
 
 1. Read the scenario carefully and identify requirements and edge cases.
